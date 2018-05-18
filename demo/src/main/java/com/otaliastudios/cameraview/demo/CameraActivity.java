@@ -23,12 +23,24 @@ import com.otaliastudios.cameraview.CameraOptions;
 import com.otaliastudios.cameraview.CameraView;
 import com.otaliastudios.cameraview.Size;
 
+import org.apache.http.HttpEntity;
+import org.apache.http.HttpResponse;
+import org.apache.http.client.ClientProtocolException;
+import org.apache.http.client.HttpClient;
+import org.apache.http.client.methods.HttpPost;
+import org.apache.http.entity.mime.HttpMultipartMode;
+import org.apache.http.entity.mime.MultipartEntityBuilder;
+import org.apache.http.entity.mime.content.ByteArrayBody;
+import org.apache.http.entity.mime.content.ContentBody;
+import org.apache.http.impl.client.DefaultHttpClient;
+import org.apache.http.util.EntityUtils;
+
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
-
+import java.nio.charset.Charset;
 
 public class CameraActivity extends AppCompatActivity implements View.OnClickListener, ControlView.Callback {
 
@@ -43,14 +55,20 @@ public class CameraActivity extends AppCompatActivity implements View.OnClickLis
 
     private final int THICKNESS = 30;
 
-    private final int frameX = 280;
-    private final int frameY = 200;
-    private final int cropX = frameX+THICKNESS;
-    private final int cropY = frameY-THICKNESS;
+    private final double frameX = 0.25;
+    private final double frameY = 0.1;
+
+    private final int reducedWidth = 1920;
+    //private final int cropX = frameX+THICKNESS;
+    //private final int cropY = frameY-THICKNESS;
     private static int frameWidth = 0;
     private static int frameHeight = 0;
     private static int rootWidth = 0;
     private static int rootHeight = 0;
+
+    private final String IPADDR = "10.122.66.152";
+    private final String DIR = "/api/pilot/upload/";
+    private final int PORT = 8000;
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -62,15 +80,27 @@ public class CameraActivity extends AppCompatActivity implements View.OnClickLis
         camera.addCameraListener(new CameraListener() {
             public void onCameraOpened(CameraOptions options) { onOpened(); }
             public void onPictureTaken(byte[] jpeg) {
-                savePicture(jpeg, "original");
-                byte[] croppedImg = cropPicture(jpeg,
-                                                    cropX*1.0 / rootWidth,
-                                                    cropY*1.0 / rootHeight,
-                                                    (rootWidth-cropX*2.0) / rootWidth,
-                                                    (rootHeight-cropY*2.0) / rootHeight);
-                savePicture(croppedImg, "cropped");
+
+                //savePicture(jpeg, "original");
+                //byte[] croppedImg = cropPicture(jpeg,
+                //                                    frameX,
+                //                                    frameY,
+                //                                    rootWidth*(1-frameX*2) / rootWidth,
+                //                                    rootHeight*(1-frameY*2) / rootHeight);
+
+                final byte[] resizedImg = resizePicture(jpeg);
+                savePicture(resizedImg, "resized");
+                Thread th = new Thread(new Runnable() {
+                    @Override
+                    public void run() {
+                        sendPicture(resizedImg);
+                    }
+                });
+                th.start();
                 onPicture(jpeg);
             }
+
+
         });
 
         findViewById(R.id.capturePhoto).setOnClickListener(this);
@@ -93,7 +123,52 @@ public class CameraActivity extends AppCompatActivity implements View.OnClickLis
         });
     }
 
-    private void createOverlay(int frameX, int frameY) {
+    private void sendPicture(byte[] jpeg) {
+        HttpClient httpClient = new DefaultHttpClient();
+        HttpPost httpPost = new HttpPost("http://"+IPADDR+":"+Integer.toString(PORT)+DIR);
+        MultipartEntityBuilder builder = MultipartEntityBuilder.create()
+                .setCharset(Charset.forName("UTF-8"))
+                .setMode(HttpMultipartMode.BROWSER_COMPATIBLE);
+
+        ContentBody cb = new ByteArrayBody(jpeg, "pic.jpg");
+        builder.addPart("content", cb);
+
+        builder.addTextBody("purpose", "idr");
+        builder.addTextBody("frameX", Double.toString(frameY));
+        builder.addTextBody("frameY", Double.toString(frameX));
+
+        try {
+            httpPost.setEntity(builder.build());
+            HttpResponse httpResponse = httpClient.execute(httpPost);
+            HttpEntity httpEntity = httpResponse.getEntity();
+            if (httpEntity != null){
+                //InputStream is = httpEntity.getContent();
+                String content = EntityUtils.toString(httpEntity);
+                String str = content;
+            }
+        } catch (ClientProtocolException e) {
+            e.printStackTrace();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private byte[] resizePicture(byte[] jpeg) {
+        Bitmap bitmap = BitmapFactory.decodeByteArray(jpeg, 0, jpeg.length);
+        int bmWidth = bitmap.getWidth();
+        int bmHeight = bitmap.getHeight();
+        float reduceRatio = (float)reducedWidth / (float)bmWidth;
+        int reducedHeight = (int) (bmHeight*reduceRatio);
+        Bitmap newBitmap = Bitmap.createScaledBitmap(bitmap, reducedWidth, reducedHeight, true);
+
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        newBitmap.compress(Bitmap.CompressFormat.JPEG, 100, baos);
+        byte[] byteImg = baos.toByteArray();
+        newBitmap.recycle();
+        return byteImg;
+    }
+
+    private void createOverlay(double frameX, double frameY) {
         ImageView overlayTop = findViewById(R.id.top);
         ImageView overlayLeft = findViewById(R.id.left);
         ImageView overlayRight = findViewById(R.id.right);
@@ -105,19 +180,19 @@ public class CameraActivity extends AppCompatActivity implements View.OnClickLis
         rootWidth = width;
         rootHeight = height;
 
-        frameWidth = width - frameX*2;
-        frameHeight = height - frameY*2;
+        frameWidth = (int)(width * (1.0 - frameX*2));
+        frameHeight = (int)(height * (1.0 - frameY*2));
 
         CoordinatorLayout.LayoutParams topLP = new CoordinatorLayout.LayoutParams(frameWidth, THICKNESS);
-        topLP.setMargins(frameX, frameY-THICKNESS, 0, 0);
+        topLP.setMargins((int)(width*frameX), (int)(height*frameY-THICKNESS), 0, 0);
         overlayTop.setLayoutParams(topLP);
 
         CoordinatorLayout.LayoutParams leftLP = new CoordinatorLayout.LayoutParams(THICKNESS, frameHeight+THICKNESS);
-        leftLP.setMargins(frameX-THICKNESS, frameY-THICKNESS, 0, 0);
+        leftLP.setMargins((int)(width*frameX-THICKNESS), (int)(height*frameY-THICKNESS), 0, 0);
         overlayLeft.setLayoutParams(leftLP);
 
         CoordinatorLayout.LayoutParams rightLP = new CoordinatorLayout.LayoutParams(THICKNESS, frameHeight+THICKNESS);
-        rightLP.setMargins(frameX + frameWidth, frameY-THICKNESS, 0, 0);
+        rightLP.setMargins((int)(width*frameX) + frameWidth, (int)(height*frameY-THICKNESS), 0, 0);
         overlayRight.setLayoutParams(rightLP);
     }
 
@@ -140,13 +215,15 @@ public class CameraActivity extends AppCompatActivity implements View.OnClickLis
 
         PicturePreviewActivity.setImage(jpeg);
         Intent intent = new Intent(CameraActivity.this, PicturePreviewActivity.class);
-        intent.putExtra("delay", mCaptureTime);
-        intent.putExtra("nativeWidth", mCaptureNativeSize.getWidth());
-        intent.putExtra("nativeHeight", mCaptureNativeSize.getHeight());
-        startActivity(intent);
 
-        mCaptureTime = 0;
-        mCaptureNativeSize = null;
+        intent.putExtra("type", "OCR 일반");
+        intent.putExtra("result", "<5422751+ +00024500109998180115+ +38001< <11<");
+        //intent.putExtra("nativeHeight", mCaptureNativeSize.getHeight());
+        startActivity(intent);
+        //AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        //builder.setTitle("인식결과: OCR 일반").setMessage("<5422751+ +00024500109998180115+ +38001< <11<").show();
+        //mCaptureTime = 0;
+        //mCaptureNativeSize = null;
     }
 
     private void savePicture(byte[] jpeg, String filename) {

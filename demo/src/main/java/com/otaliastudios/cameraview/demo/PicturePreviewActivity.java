@@ -5,9 +5,7 @@ import android.graphics.Bitmap;
 import android.os.Bundle;
 import android.support.annotation.Nullable;
 import android.widget.ImageView;
-import android.widget.TextView;
 
-import com.otaliastudios.cameraview.AspectRatio;
 import com.otaliastudios.cameraview.CameraUtils;
 
 import java.lang.ref.WeakReference;
@@ -31,9 +29,8 @@ public class PicturePreviewActivity extends Activity {
         // final MessageView approxUncompressedSize = findViewById(R.id.approxUncompressedSize);
         final MessageView captureLatency = findViewById(R.id.captureLatency);
 
-        final long delay = getIntent().getLongExtra("delay", 0);
-        final int nativeWidth = getIntent().getIntExtra("nativeWidth", 0);
-        final int nativeHeight = getIntent().getIntExtra("nativeHeight", 0);
+        final String type = getIntent().getStringExtra("type");
+        final String result = getIntent().getStringExtra("result");
         byte[] b = image == null ? null : image.get();
         if (b == null) {
             finish();
@@ -48,13 +45,12 @@ public class PicturePreviewActivity extends Activity {
                 // approxUncompressedSize.setTitle("Approx. uncompressed size");
                 // approxUncompressedSize.setMessage(getApproximateFileMegabytes(bitmap) + "MB");
 
-                captureLatency.setTitle("Approx. capture latency");
-                captureLatency.setMessage(delay + " milliseconds");
+                captureLatency.setTitle("type");
+                captureLatency.setMessage("OCR 일반");
 
                 // ncr and ar might be different when cropOutput is true.
-                AspectRatio nativeRatio = AspectRatio.of(nativeWidth, nativeHeight);
-                nativeCaptureResolution.setTitle("Native capture resolution");
-                nativeCaptureResolution.setMessage(nativeWidth + "x" + nativeHeight + " (" + nativeRatio + ")");
+                nativeCaptureResolution.setTitle("result");
+                nativeCaptureResolution.setMessage("<5422751+ +00024500109998180115+ +38001< <11<");
 
                 // AspectRatio finalRatio = AspectRatio.of(bitmap.getWidth(), bitmap.getHeight());
                 // actualResolution.setTitle("Actual resolution");
