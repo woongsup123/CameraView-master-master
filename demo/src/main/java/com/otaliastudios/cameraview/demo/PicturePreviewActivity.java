@@ -24,13 +24,12 @@ public class PicturePreviewActivity extends Activity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_picture_preview);
         final ImageView imageView = findViewById(R.id.image);
-        final MessageView nativeCaptureResolution = findViewById(R.id.nativeCaptureResolution);
-        // final MessageView actualResolution = findViewById(R.id.actualResolution);
-        // final MessageView approxUncompressedSize = findViewById(R.id.approxUncompressedSize);
-        final MessageView captureLatency = findViewById(R.id.captureLatency);
-
+        final MessageView typeMessageView = findViewById(R.id.type);
+        final MessageView resultMessageView = findViewById(R.id.result);
+        final MessageView metaMessageView = findViewById(R.id.meta);
         final String type = getIntent().getStringExtra("type");
         final String result = getIntent().getStringExtra("result");
+        final String meta = getIntent().getStringExtra("meta");
         byte[] b = image == null ? null : image.get();
         if (b == null) {
             finish();
@@ -45,12 +44,22 @@ public class PicturePreviewActivity extends Activity {
                 // approxUncompressedSize.setTitle("Approx. uncompressed size");
                 // approxUncompressedSize.setMessage(getApproximateFileMegabytes(bitmap) + "MB");
 
-                captureLatency.setTitle("type");
-                captureLatency.setMessage("OCR 일반");
-
-                // ncr and ar might be different when cropOutput is true.
-                nativeCaptureResolution.setTitle("result");
-                nativeCaptureResolution.setMessage("<5422751+ +00024500109998180115+ +38001< <11<");
+                typeMessageView.setTitle("고지서 or 지폐");
+                if (type.equals("NOTE")) {
+                    typeMessageView.setMessage("지폐");
+                }
+                else{
+                    if (result.equals("")){
+                        typeMessageView.setMessage("지폐");
+                    }
+                    else {
+                        typeMessageView.setMessage("고지서");
+                        resultMessageView.setTitle("고지서 종류");
+                        resultMessageView.setMessage(result);
+                    }
+                }
+                metaMessageView.setTitle("결과 값");
+                metaMessageView.setMessage(meta);
 
                 // AspectRatio finalRatio = AspectRatio.of(bitmap.getWidth(), bitmap.getHeight());
                 // actualResolution.setTitle("Actual resolution");

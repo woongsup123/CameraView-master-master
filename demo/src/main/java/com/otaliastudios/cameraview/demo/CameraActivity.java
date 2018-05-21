@@ -21,7 +21,6 @@ import com.otaliastudios.cameraview.CameraListener;
 import com.otaliastudios.cameraview.CameraLogger;
 import com.otaliastudios.cameraview.CameraOptions;
 import com.otaliastudios.cameraview.CameraView;
-import com.otaliastudios.cameraview.Size;
 
 import org.apache.http.HttpEntity;
 import org.apache.http.HttpResponse;
@@ -34,6 +33,8 @@ import org.apache.http.entity.mime.content.ByteArrayBody;
 import org.apache.http.entity.mime.content.ContentBody;
 import org.apache.http.impl.client.DefaultHttpClient;
 import org.apache.http.util.EntityUtils;
+import org.json.JSONException;
+import org.json.JSONObject;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -50,7 +51,9 @@ public class CameraActivity extends AppCompatActivity implements View.OnClickLis
     private boolean mCapturingPicture;
 
     // To show stuff in the callback
-    private Size mCaptureNativeSize;
+    private static String type = "";
+    private static String result = "";
+    private static String meta = "";
     private long mCaptureTime;
 
     private final int THICKNESS = 30;
@@ -59,6 +62,7 @@ public class CameraActivity extends AppCompatActivity implements View.OnClickLis
     private final double frameY = 0.1;
 
     private final int reducedWidth = 1920;
+    private static int reducedHeight = 0;
     //private final int cropX = frameX+THICKNESS;
     //private final int cropY = frameY-THICKNESS;
     private static int frameWidth = 0;
@@ -66,9 +70,9 @@ public class CameraActivity extends AppCompatActivity implements View.OnClickLis
     private static int rootWidth = 0;
     private static int rootHeight = 0;
 
-    private final String IPADDR = "10.122.66.152";
+    private final String IPADDR = "125.132.250.244";
     private final String DIR = "/api/pilot/upload/";
-    private final int PORT = 8000;
+    private final int PORT = 801;
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -79,7 +83,7 @@ public class CameraActivity extends AppCompatActivity implements View.OnClickLis
         camera = findViewById(R.id.camera);
         camera.addCameraListener(new CameraListener() {
             public void onCameraOpened(CameraOptions options) { onOpened(); }
-            public void onPictureTaken(byte[] jpeg) {
+            public void onPictureTaken(final byte[] jpeg) {
 
                 //savePicture(jpeg, "original");
                 //byte[] croppedImg = cropPicture(jpeg,
@@ -94,10 +98,10 @@ public class CameraActivity extends AppCompatActivity implements View.OnClickLis
                     @Override
                     public void run() {
                         sendPicture(resizedImg);
+                        onPicture(jpeg);
                     }
                 });
                 th.start();
-                onPicture(jpeg);
             }
 
 
@@ -134,9 +138,11 @@ public class CameraActivity extends AppCompatActivity implements View.OnClickLis
         builder.addPart("content", cb);
 
         builder.addTextBody("purpose", "idr");
-        builder.addTextBody("frameX", Double.toString(frameY));
-        builder.addTextBody("frameY", Double.toString(frameX));
-
+        builder.addTextBody("width", Integer.toString(reducedWidth));
+        builder.addTextBody("height", Integer.toString(reducedHeight));
+        builder.addTextBody("ref_vertex_x", Double.toString(frameY));
+        builder.addTextBody("ref_vertex_y", Double.toString(frameX));
+        builder.addTextBody("symm_crop", "False");
         try {
             httpPost.setEntity(builder.build());
             HttpResponse httpResponse = httpClient.execute(httpPost);
@@ -144,11 +150,18 @@ public class CameraActivity extends AppCompatActivity implements View.OnClickLis
             if (httpEntity != null){
                 //InputStream is = httpEntity.getContent();
                 String content = EntityUtils.toString(httpEntity);
-                String str = content;
+                JSONObject jsonObject = new JSONObject(content);
+                type = jsonObject.getString("type");
+                result = jsonObject.getString("result");
+                meta = jsonObject.getString("meta");
+                JSONObject metaObject = new JSONObject(meta);
+                meta = metaObject.getString("result_string");
             }
         } catch (ClientProtocolException e) {
             e.printStackTrace();
         } catch (IOException e) {
+            e.printStackTrace();
+        } catch (JSONException e) {
             e.printStackTrace();
         }
     }
@@ -157,8 +170,11 @@ public class CameraActivity extends AppCompatActivity implements View.OnClickLis
         Bitmap bitmap = BitmapFactory.decodeByteArray(jpeg, 0, jpeg.length);
         int bmWidth = bitmap.getWidth();
         int bmHeight = bitmap.getHeight();
-        float reduceRatio = (float)reducedWidth / (float)bmWidth;
-        int reducedHeight = (int) (bmHeight*reduceRatio);
+        float reduceRatio = (float) 1.0;
+        if (reducedWidth < bmWidth) {
+            reduceRatio = (float) reducedWidth / (float) bmWidth;
+        }
+        reducedHeight = (int) (bmHeight*reduceRatio);
         Bitmap newBitmap = Bitmap.createScaledBitmap(bitmap, reducedWidth, reducedHeight, true);
 
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
@@ -216,10 +232,14 @@ public class CameraActivity extends AppCompatActivity implements View.OnClickLis
         PicturePreviewActivity.setImage(jpeg);
         Intent intent = new Intent(CameraActivity.this, PicturePreviewActivity.class);
 
-        intent.putExtra("type", "OCR 일반");
-        intent.putExtra("result", "<5422751+ +00024500109998180115+ +38001< <11<");
+        intent.putExtra("type", type);
+        intent.putExtra("result", result);
+        intent.putExtra("meta", meta);
         //intent.putExtra("nativeHeight", mCaptureNativeSize.getHeight());
         startActivity(intent);
+        type ="";
+        result="";
+        meta="";
         //AlertDialog.Builder builder = new AlertDialog.Builder(this);
         //builder.setTitle("인식결과: OCR 일반").setMessage("<5422751+ +00024500109998180115+ +38001< <11<").show();
         //mCaptureTime = 0;
@@ -292,8 +312,6 @@ public class CameraActivity extends AppCompatActivity implements View.OnClickLis
     private void capturePhoto() {
         if (mCapturingPicture) return;
         mCapturingPicture = true;
-        mCaptureTime = System.currentTimeMillis();
-        mCaptureNativeSize = camera.getPictureSize();
         message("Capturing picture...", false);
         camera.capturePicture();
     }
